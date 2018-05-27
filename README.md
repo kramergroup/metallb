@@ -9,16 +9,6 @@ routing protocols.
 Check out [MetalLB's website](https://metallb.universe.tf) for more
 information.
 
-# Fork
-
-This fork implements a new feature to source IPs. Metallb has the ability to source IPs from a predefined list. This creates problems, if the environment does not allow for reserved IP ranges (e.g., due to coorporate policy) and only provides for dynamically assigned IPs (e.g., via DHCP). This fork implements capabilities to define `address-services` (dynamic) in addition to `address-pools` (static).
-
-## Address services
-
-Address services are restful HTTP endpoints that implement the following API:
-
-
-
 # Contributing
 
 We welcome contributions in all forms. Please check out
