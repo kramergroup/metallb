@@ -30,14 +30,19 @@ A reference implementation of a DHCP-enabled Address Service can be found here: 
 
 ### Configuration
 
-Address services are configured using the config file. A minimal configuration provides the API base-URL and routing protocol:
+Address services are configured using the `address-services` section in the config file. A minimal configuration provides the API base-URL, routing protocol, and network ranges (in [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) format):
 
 ```yaml
 address-services:
 - name: example
   url: http://dhcpmanager
   protocol: layer2
+  cidrs:
+  - 192.168.0.0/16
 ```
+
+> Note: The CIDR network ranges are used to ensure the service returns compatible IPs. It is the responsibility of the service to provide IPs within this range.
+
 
 # Contributing
 
