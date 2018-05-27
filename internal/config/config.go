@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/mikioh/ipaddr"
+	"go.universe.tf/metallb/internal/pools"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -34,6 +35,7 @@ type configFile struct {
 	Peers          []peer
 	BGPCommunities map[string]string `yaml:"bgp-communities"`
 	Pools          []addressPool     `yaml:"address-pools"`
+	Services       []addressService  `yaml:"address-services"`
 }
 
 type peer struct {
@@ -62,6 +64,16 @@ type addressPool struct {
 	Protocol          Proto
 	Name              string
 	Addresses         []string
+	AvoidBuggyIPs     bool               `yaml:"avoid-buggy-ips"`
+	AutoAssign        *bool              `yaml:"auto-assign"`
+	BGPAdvertisements []bgpAdvertisement `yaml:"bgp-advertisements"`
+}
+
+type addressService struct {
+	Protocol          Proto
+	Name              string
+	URL               string             `yaml:"url"`
+	AuthToken         string             `yaml:"auth-token"`
 	AvoidBuggyIPs     bool               `yaml:"avoid-buggy-ips"`
 	AutoAssign        *bool              `yaml:"auto-assign"`
 	BGPAdvertisements []bgpAdvertisement `yaml:"bgp-advertisements"`
@@ -116,10 +128,8 @@ type Peer struct {
 type Pool struct {
 	// Protocol for this pool.
 	Protocol Proto
-	// The addresses that are part of this pool, expressed as CIDR
-	// prefixes. config.Parse guarantees that these are
-	// non-overlapping, both within and between pools.
-	CIDR []*net.IPNet
+	// The addresses that are part of this pool.
+	Addresses pools.AddressSpace
 	// Some buggy consumer devices mistakenly drop IPv4 traffic for IP
 	// addresses ending in .0 or .255, due to poor implementations of
 	// smurf protection. This setting marks such addresses as
@@ -225,7 +235,30 @@ func Parse(bs []byte) (*Config, error) {
 		}
 
 		// Check that all specified CIDR ranges are non-overlapping.
-		for _, cidr := range pool.CIDR {
+		for _, cidr := range pool.Addresses.CIDR() {
+			for _, m := range allCIDRs {
+				if cidrsOverlap(cidr, m) {
+					return nil, fmt.Errorf("CIDR %q in pool %q overlaps with already defined CIDR %q", cidr, p.Name, m)
+				}
+			}
+			allCIDRs = append(allCIDRs, cidr)
+		}
+
+		cfg.Pools[p.Name] = pool
+	}
+
+	for i, p := range raw.Services {
+		pool, err := parseAddressService(p, communities)
+		if err != nil {
+			return nil, fmt.Errorf("parsing address pool #%d: %s", i+1, err)
+		}
+		// Check that the pool isn't already defined
+		if cfg.Pools[p.Name] != nil {
+			return nil, fmt.Errorf("duplicate definition of pool %q", p.Name)
+		}
+
+		// Check that all specified CIDR ranges are non-overlapping.
+		for _, cidr := range pool.Addresses.CIDR() {
 			for _, m := range allCIDRs {
 				if cidrsOverlap(cidr, m) {
 					return nil, fmt.Errorf("CIDR %q in pool %q overlaps with already defined CIDR %q", cidr, p.Name, m)
@@ -320,13 +353,8 @@ func parseAddressPool(p addressPool, bgpCommunities map[string]uint32) (*Pool, e
 	if len(p.Addresses) == 0 {
 		return nil, errors.New("pool has no prefixes defined")
 	}
-	for _, cidr := range p.Addresses {
-		nets, err := parseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid CIDR %q in pool %q", cidr, p.Name)
-		}
-		ret.CIDR = append(ret.CIDR, nets...)
-	}
+
+	ret.Addresses = pools.NewFixedCIDRAddressSpace(p.Addresses)
 
 	switch ret.Protocol {
 	case Layer2:
@@ -334,7 +362,48 @@ func parseAddressPool(p addressPool, bgpCommunities map[string]uint32) (*Pool, e
 			return nil, errors.New("cannot have bgp-advertisements configuration element in a layer2 address pool")
 		}
 	case BGP:
-		ads, err := parseBGPAdvertisements(p.BGPAdvertisements, ret.CIDR, bgpCommunities)
+		ads, err := parseBGPAdvertisements(p.BGPAdvertisements, ret.Addresses.CIDR(), bgpCommunities)
+		if err != nil {
+			return nil, fmt.Errorf("parsing BGP communities: %s", err)
+		}
+		ret.BGPAdvertisements = ads
+	case "":
+		return nil, errors.New("address pool is missing the protocol field")
+	default:
+		return nil, fmt.Errorf("unknown protocol %q", ret.Protocol)
+	}
+
+	return ret, nil
+}
+
+func parseAddressService(p addressService, bgpCommunities map[string]uint32) (*Pool, error) {
+	if p.Name == "" {
+		return nil, errors.New("missing pool name")
+	}
+
+	ret := &Pool{
+		Protocol:      p.Protocol,
+		AvoidBuggyIPs: p.AvoidBuggyIPs,
+		AutoAssign:    true,
+	}
+
+	if p.AutoAssign != nil {
+		ret.AutoAssign = *p.AutoAssign
+	}
+
+	if p.URL == "" {
+		return nil, errors.New("address service is missing the URL field")
+	}
+
+	ret.Addresses = pools.NewEndpointAddressSpace(p.URL, p.AuthToken)
+
+	switch ret.Protocol {
+	case Layer2:
+		if len(p.BGPAdvertisements) > 0 {
+			return nil, errors.New("cannot have bgp-advertisements configuration element in a layer2 address pool")
+		}
+	case BGP:
+		ads, err := parseBGPAdvertisements(p.BGPAdvertisements, ret.Addresses.CIDR(), bgpCommunities)
 		if err != nil {
 			return nil, fmt.Errorf("parsing BGP communities: %s", err)
 		}

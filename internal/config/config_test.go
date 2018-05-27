@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"go.universe.tf/metallb/internal/pools"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -114,7 +115,7 @@ address-pools:
 				Pools: map[string]*Pool{
 					"pool1": {
 						Protocol:      BGP,
-						CIDR:          []*net.IPNet{ipnet("10.20.0.0/16"), ipnet("10.50.0.0/24")},
+						Addresses:     pools.NewFixedCIDRAddressSpace([]string{"10.20.0.0/16", "10.50.0.0/24"}),
 						AvoidBuggyIPs: true,
 						AutoAssign:    false,
 						BGPAdvertisements: []*BGPAdvertisement{
@@ -134,7 +135,7 @@ address-pools:
 					},
 					"pool2": {
 						Protocol:   BGP,
-						CIDR:       []*net.IPNet{ipnet("30.0.0.0/8")},
+						Addresses:  pools.NewFixedCIDRAddressSpace([]string{"30.0.0.0/8"}),
 						AutoAssign: true,
 						BGPAdvertisements: []*BGPAdvertisement{
 							{
@@ -145,19 +146,19 @@ address-pools:
 					},
 					"pool3": {
 						Protocol: Layer2,
-						CIDR: []*net.IPNet{
-							ipnet("40.0.0.0/25"),
-							ipnet("40.0.0.150/31"),
-							ipnet("40.0.0.152/29"),
-							ipnet("40.0.0.160/27"),
-							ipnet("40.0.0.192/29"),
-							ipnet("40.0.0.200/32"),
-						},
+						Addresses: pools.NewFixedCIDRAddressSpace([]string{
+							"40.0.0.0/25",
+							"40.0.0.150/31",
+							"40.0.0.152/29",
+							"40.0.0.160/27",
+							"40.0.0.192/29",
+							"40.0.0.200/32",
+						}),
 						AutoAssign: true,
 					},
 					"pool4": {
 						Protocol:   Layer2,
-						CIDR:       []*net.IPNet{ipnet("2001:db8::/64")},
+						Addresses:  pools.NewFixedCIDRAddressSpace([]string{"2001:db8::/64"}),
 						AutoAssign: true,
 					},
 				},
@@ -408,7 +409,7 @@ address-pools:
 					"pool1": {
 						Protocol:   BGP,
 						AutoAssign: true,
-						CIDR:       []*net.IPNet{ipnet("1.2.3.0/24")},
+						Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24"}),
 						BGPAdvertisements: []*BGPAdvertisement{
 							{
 								AggregationLength: 32,
@@ -433,7 +434,7 @@ address-pools:
 					"pool1": {
 						Protocol:   BGP,
 						AutoAssign: true,
-						CIDR:       []*net.IPNet{ipnet("1.2.3.0/24")},
+						Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24"}),
 						BGPAdvertisements: []*BGPAdvertisement{
 							{
 								AggregationLength: 32,

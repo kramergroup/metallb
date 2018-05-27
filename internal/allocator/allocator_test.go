@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.universe.tf/metallb/internal/config"
+	"go.universe.tf/metallb/internal/pools"
 )
 
 func TestAssignment(t *testing.T) {
@@ -14,12 +15,12 @@ func TestAssignment(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"test": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.4/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.4/31"}),
 		},
 		"test2": {
 			AvoidBuggyIPs: true,
 			AutoAssign:    true,
-			CIDR:          []*net.IPNet{ipnet("1.2.4.0/24")},
+			Addresses:     pools.NewFixedCIDRAddressSpace([]string{"1.2.4.0/24"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -215,15 +216,15 @@ func TestPoolAllocation(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"not_this_one": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("192.168.0.0/16")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"192.168.0.0/16"}),
 		},
 		"test": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.4/31"), ipnet("1.2.3.10/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.4/31", "1.2.3.10/31"}),
 		},
 		"test2": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("10.20.30.0/24")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"10.20.30.0/24"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -335,11 +336,11 @@ func TestAllocation(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"test1": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.4/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.4/31"}),
 		},
 		"test2": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.10/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.10/31"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -436,21 +437,21 @@ func TestBuggyIPs(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"test": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.0/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/31"}),
 		},
 		"test2": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.254/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.254/31"}),
 		},
 		"test3": {
 			AvoidBuggyIPs: true,
 			AutoAssign:    true,
-			CIDR:          []*net.IPNet{ipnet("1.2.4.0/31")},
+			Addresses:     pools.NewFixedCIDRAddressSpace([]string{"1.2.4.0/31"}),
 		},
 		"test4": {
 			AvoidBuggyIPs: true,
 			AutoAssign:    true,
-			CIDR:          []*net.IPNet{ipnet("1.2.4.254/31")},
+			Addresses:     pools.NewFixedCIDRAddressSpace([]string{"1.2.4.254/31"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -505,7 +506,7 @@ func TestConfigReload(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"test": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.0/30")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/30"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -525,7 +526,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/30")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/30"}),
 				},
 			},
 			pool: "test",
@@ -535,7 +536,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/24")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24"}),
 				},
 			},
 			pool: "test",
@@ -545,7 +546,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/30")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/30"}),
 				},
 			},
 			pool: "test",
@@ -555,7 +556,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.2/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.2/31"}),
 				},
 			},
 			pool:    "test",
@@ -566,7 +567,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test2": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/30")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/30"}),
 				},
 			},
 			pool: "test2",
@@ -576,11 +577,11 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/31"}),
 				},
 				"test2": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.2/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.2/31"}),
 				},
 			},
 			pool: "test",
@@ -590,11 +591,11 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test2": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/31"}),
 				},
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.2/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.2/31"}),
 				},
 			},
 			pool: "test2",
@@ -604,7 +605,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.2/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.2/31"}),
 				},
 			},
 			pool:    "test2",
@@ -615,7 +616,7 @@ func TestConfigReload(t *testing.T) {
 			pools: map[string]*config.Pool{
 				"test2": {
 					AutoAssign: true,
-					CIDR:       []*net.IPNet{ipnet("1.2.3.0/31")},
+					Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/31"}),
 				},
 			},
 			pool: "test2",
@@ -626,7 +627,7 @@ func TestConfigReload(t *testing.T) {
 				"test2": {
 					AutoAssign:    true,
 					AvoidBuggyIPs: true,
-					CIDR:          []*net.IPNet{ipnet("1.2.3.0/31")},
+					Addresses:     pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/31"}),
 				},
 			},
 			pool:    "test2",
@@ -655,11 +656,11 @@ func TestAutoAssign(t *testing.T) {
 	if err := alloc.SetPools(map[string]*config.Pool{
 		"test1": {
 			AutoAssign: false,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.4/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.4/31"}),
 		},
 		"test2": {
 			AutoAssign: true,
-			CIDR:       []*net.IPNet{ipnet("1.2.3.10/31")},
+			Addresses:  pools.NewFixedCIDRAddressSpace([]string{"1.2.3.10/31"}),
 		},
 	}); err != nil {
 		t.Fatalf("SetPools: %s", err)
@@ -718,16 +719,16 @@ func TestPoolCount(t *testing.T) {
 		{
 			desc: "BGP /24",
 			pool: &config.Pool{
-				Protocol: config.BGP,
-				CIDR:     []*net.IPNet{ipnet("1.2.3.0/24")},
+				Protocol:  config.BGP,
+				Addresses: pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24"}),
 			},
 			want: 256,
 		},
 		{
 			desc: "BGP /24 and /25",
 			pool: &config.Pool{
-				Protocol: config.BGP,
-				CIDR:     []*net.IPNet{ipnet("1.2.3.0/24"), ipnet("2.3.4.128/25")},
+				Protocol:  config.BGP,
+				Addresses: pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24", "2.3.4.128/25"}),
 			},
 			want: 384,
 		},
@@ -735,7 +736,7 @@ func TestPoolCount(t *testing.T) {
 			desc: "BGP /24 and /25, no buggy IPs",
 			pool: &config.Pool{
 				Protocol:      config.BGP,
-				CIDR:          []*net.IPNet{ipnet("1.2.3.0/24"), ipnet("2.3.4.128/25")},
+				Addresses:     pools.NewFixedCIDRAddressSpace([]string{"1.2.3.0/24", "2.3.4.128/25"}),
 				AvoidBuggyIPs: true,
 			},
 			want: 381,

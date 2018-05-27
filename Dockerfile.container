@@ -1,0 +1,11 @@
+FROM golang:latest as BUILDER
+
+COPY . /go/src/go.universe.tf/metallb
+WORKDIR /go/src/go.universe.tf/metallb/controller
+RUN go get 
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o controller .
+
+FROM alpine:latest
+
+COPY --from=builder /go/src/go.universe.tf/metallb/controller/controller /controller
+ENTRYPOINT ["/controller"]

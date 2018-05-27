@@ -3,6 +3,7 @@ package allocator // import "go.universe.tf/metallb/internal/allocator"
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"strings"
@@ -16,6 +17,7 @@ import (
 type Allocator struct {
 	pools map[string]*config.Pool
 
+	pending         map[*alloc]bool            // pending allocations (used to prevent return of pending IPs)
 	allocated       map[string]*alloc          // svc -> alloc
 	sharingKeyForIP map[string]*key            // ip.String() -> assigned sharing key
 	portsInUse      map[string]map[Port]string // ip.String() -> Port -> svc
@@ -52,6 +54,7 @@ func New() *Allocator {
 	return &Allocator{
 		pools: map[string]*config.Pool{},
 
+		pending:         map[*alloc]bool{},
 		allocated:       map[string]*alloc{},
 		sharingKeyForIP: map[string]*key{},
 		portsInUse:      map[string]map[Port]string{},
@@ -177,7 +180,9 @@ func (a *Allocator) Assign(svc string, ip net.IP, ports []Port, sharingKey, back
 		port := port
 		alloc.ports[i] = port
 	}
+	a.pending[alloc] = true
 	a.assign(svc, alloc)
+	delete(a.pending, alloc)
 	return nil
 }
 
@@ -207,6 +212,23 @@ func (a *Allocator) Unassign(svc string) bool {
 		delete(a.poolIPsInUse[al.pool], al.ip.String())
 	}
 	a.poolServices[al.pool]--
+
+	// We can't return the IP to the pool if there are pending allocations using it. This happens because
+	// the code unassigns services before reassigning them. But at this point, the IP has already been
+	// obtained and associated with an allocation. So returning it, would free resources that are still needed.
+	// At the same time, Unassign is called when services are deleted or mutated. In these circumstances,
+	// the IP should be returned.
+	var returnIP = true
+	for pendingAl, _ := range a.pending {
+		if al.ip.Equal(pendingAl.ip) {
+			returnIP = false
+			break
+		}
+	}
+	if returnIP {
+		a.pools[al.pool].Addresses.ReturnIP(&al.ip)
+	}
+
 	return true
 }
 
@@ -224,19 +246,20 @@ func (a *Allocator) AllocateFromPool(svc, poolName string, ports []Port, sharing
 		return nil, fmt.Errorf("unknown pool %q", poolName)
 	}
 
-	for _, cidr := range pool.CIDR {
-		c := ipaddr.NewCursor([]ipaddr.Prefix{*ipaddr.NewPrefix(cidr)})
-		for pos := c.First(); pos != nil; pos = c.Next() {
-			ip := pos.IP
-			if pool.AvoidBuggyIPs && ipConfusesBuggyFirmwares(ip) {
-				continue
-			}
-			// Somewhat inefficiently brute-force by invoking the
-			// IP-specific allocator.
-			if err := a.Assign(svc, ip, ports, sharingKey, backendKey); err == nil {
-				return ip, nil
-			}
+	if ip, err := pool.Addresses.IPForService(svc); err == nil {
+		if err := a.Assign(svc, *ip, ports, sharingKey, backendKey); err == nil {
+			return *ip, nil
+		} else {
+			// Address not assignable - try again and return current address
+			// afterwards (to avoid cycles)
+			// FIXME: This might lead to quite a long callstack for large CIDRs.
+			//        Maybe implement a maximum number of trials?
+			defer pool.Addresses.ReturnIP(ip)
+			log.Printf("Error assigning IP [%s] - %s", ip, err)
+			return a.AllocateFromPool(svc, poolName, ports, sharingKey, backendKey)
 		}
+	} else {
+		return nil, err
 	}
 
 	// Woops, run out of IPs :( Fail.
@@ -301,7 +324,7 @@ func sharingOK(existing, new *key) error {
 // poolCount returns the number of addresses in the pool.
 func poolCount(p *config.Pool) int64 {
 	var total int64
-	for _, cidr := range p.CIDR {
+	for _, cidr := range p.Addresses.CIDR() {
 		o, b := cidr.Mask.Size()
 		sz := int64(math.Pow(2, float64(b-o)))
 
@@ -337,7 +360,7 @@ func poolFor(pools map[string]*config.Pool, ip net.IP) string {
 		if p.AvoidBuggyIPs && ipConfusesBuggyFirmwares(ip) {
 			continue
 		}
-		for _, cidr := range p.CIDR {
+		for _, cidr := range p.Addresses.CIDR() {
 			if cidr.Contains(ip) {
 				return pname
 			}
