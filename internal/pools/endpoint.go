@@ -18,15 +18,17 @@ import (
 // interface.
 type EndpointAddressSpace struct {
 	endpoint endpoint
+	Cidrs    []*net.IPNet
 }
 
 // NewEndpointAddressSpace creates a new Endpoint
-func NewEndpointAddressSpace(URL, authToken string) *EndpointAddressSpace {
+func NewEndpointAddressSpace(URL, authToken string, cidrs []*net.IPNet) *EndpointAddressSpace {
 	return &EndpointAddressSpace{
 		endpoint: endpoint{
 			URL:       URL,
 			AuthToken: authToken,
 		},
+		Cidrs: cidrs,
 	}
 }
 
@@ -46,20 +48,21 @@ func (p *EndpointAddressSpace) ReturnIP(ip *net.IP) {
 // to debug. We should find a way to communicate errors
 func (p *EndpointAddressSpace) CIDR() []*net.IPNet {
 
-	res, err := p.endpoint.configuration()
-	if err != nil {
-		return make([]*net.IPNet, 0)
-	}
-
-	cidrs := []*net.IPNet{}
-	for _, cidr := range res.CIDRs {
-		if c, err := parseCIDR(cidr); err == nil {
-			cidrs = append(cidrs, c...)
-		} else {
-			log.Println("Error [CIDR] > %s", err.Error())
-		}
-	}
-	return cidrs
+	return p.Cidrs
+	// res, err := p.endpoint.configuration()
+	// if err != nil {
+	// 	return make([]*net.IPNet, 0)
+	// }
+	//
+	// cidrs := []*net.IPNet{}
+	// for _, cidr := range res.CIDRs {
+	// 	if c, err := parseCIDR(cidr); err == nil {
+	// 		cidrs = append(cidrs, c...)
+	// 	} else {
+	// 		log.Println("Error [CIDR] > %s", err.Error())
+	// 	}
+	// }
+	// return cidrs
 }
 
 // -----------------------------------------------------------------------------

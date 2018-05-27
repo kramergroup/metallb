@@ -268,7 +268,7 @@ func (c *controller) deleteBalancer(l log.Logger, name, reason string) bool {
 
 func poolFor(pools map[string]*config.Pool, ip net.IP) string {
 	for pname, p := range pools {
-		for _, cidr := range p.CIDR {
+		for _, cidr := range p.Addresses.CIDR() {
 			if cidr.Contains(ip) {
 				return pname
 			}

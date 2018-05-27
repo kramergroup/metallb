@@ -1,0 +1,11 @@
+FROM golang:latest as BUILDER
+
+COPY . /go/src/go.universe.tf/metallb
+WORKDIR /go/src/go.universe.tf/metallb/speaker
+RUN go get
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o speaker .
+
+FROM alpine:latest
+
+COPY --from=builder /go/src/go.universe.tf/metallb/speaker/speaker /speaker
+ENTRYPOINT ["/speaker"]

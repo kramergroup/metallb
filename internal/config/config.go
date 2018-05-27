@@ -77,6 +77,7 @@ type addressService struct {
 	AvoidBuggyIPs     bool               `yaml:"avoid-buggy-ips"`
 	AutoAssign        *bool              `yaml:"auto-assign"`
 	BGPAdvertisements []bgpAdvertisement `yaml:"bgp-advertisements"`
+	Cidrs             []string           `yaml:"cidrs"`
 }
 
 type bgpAdvertisement struct {
@@ -395,7 +396,16 @@ func parseAddressService(p addressService, bgpCommunities map[string]uint32) (*P
 		return nil, errors.New("address service is missing the URL field")
 	}
 
-	ret.Addresses = pools.NewEndpointAddressSpace(p.URL, p.AuthToken)
+	var nets = make([]*net.IPNet, len(p.Cidrs))
+	for i, cidr := range p.Cidrs {
+		var err error
+		_, nets[i], err = net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("Malformated CIDR [%s]", cidr)
+		}
+	}
+
+	ret.Addresses = pools.NewEndpointAddressSpace(p.URL, p.AuthToken, nets)
 
 	switch ret.Protocol {
 	case Layer2:
